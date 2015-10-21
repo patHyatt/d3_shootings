@@ -3,8 +3,8 @@
 <head>
     <style>
     path {
-        fill: #ccc;
-        stroke: #eee;
+        fill: red; /*no data*/
+        stroke: #888;
         stroke-linejoin: round;
     }
     
@@ -45,7 +45,7 @@
     }
     
     .d9 {
-        fill: red;
+        fill: blue;
     }
     </style>
 </head>
@@ -64,7 +64,7 @@ var width = 1280,
     height = 768;
 
 var quantize = d3.scale.quantize()
-    .domain([0, 1, 2, 3, 5, 7, 10])
+    .domain([0, 1, 2, 3, 5, 8, 10, 15, 20, 30, 50])
     .range(d3.range(10).map(function(i) {
         return "d" + i;
     }));
