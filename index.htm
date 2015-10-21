@@ -1,0 +1,150 @@
+<html>
+
+<head>
+    <style>
+    path {
+        fill: #ccc;
+        stroke: #eee;
+        stroke-linejoin: round;
+    }
+    
+    .d0 {
+        fill: rgb(247, 251, 255);
+    }
+    
+    .d1 {
+        fill: rgb(222, 235, 247);
+    }
+    
+    .d2 {
+        fill: rgb(198, 219, 239);
+    }
+    
+    .d3 {
+        fill: rgb(158, 202, 225);
+    }
+    
+    .d4 {
+        fill: rgb(107, 174, 214);
+    }
+    
+    .d5 {
+        fill: rgb(66, 146, 198);
+    }
+    
+    .d6 {
+        fill: rgb(33, 113, 181);
+    }
+    
+    .d7 {
+        fill: rgb(8, 81, 156);
+    }
+    
+    .d8 {
+        fill: rgb(8, 48, 107);
+    }
+    
+    .d9 {
+        fill: red;
+    }
+    </style>
+</head>
+
+<body>
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/queue-async/1.0.7/queue.min.js"></script>
+<script type="text/javascript">
+// d3.select("select[name='year']").on("change", function() {
+//     console.log(this.value);
+// });
+
+var width = 1280,
+    height = 768;
+
+var quantize = d3.scale.quantize()
+    .domain([0, 1, 2, 3, 5, 7, 10])
+    .range(d3.range(10).map(function(i) {
+        return "d" + i;
+    }));
+
+
+var projection = d3.geo.albersUsa()
+    .scale(1280)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection);
+
+queue()
+    .defer(d3.csv, "data/2014.csv")
+    .defer(d3.json, "data/us.json")
+    .defer(d3.tsv, "data/us-state-names.tsv")
+    .await(build);
+
+function build(error, stats, us, names) {
+    if (error) {
+        console.error(error);
+        return;
+    }
+
+    var features = topojson.feature(us, us.objects.states).features;
+
+    //merge names set (w/ state abbreivations) to US set
+    features.forEach(function(g) {
+        var result = names.filter(function(d) {
+            return +d.id === g.id;
+        });
+        g.name = (result[0] !== undefined) ? result[0].code : null;
+    });
+
+    //merge CSV set to US set
+    features.forEach(function(g) {
+        g.killed = g.killed ? g.killed : 0;
+        g.wounded = g.wounded ? g.wounded : 0;
+        var results = stats.filter(function(d) {
+            var state = d.location.substr(d.location.length - 2, 2).trim().toUpperCase();
+            return g.name == state;
+        });
+        g.killed += d3.sum(results, function(d) {
+            return +d.killed;
+        });
+        g.wounded += d3.sum(results, function(d) {
+            return +d.wounded;
+        });
+    });
+
+    var svg = d3.select("body")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    svg.selectAll("path")
+        .data(features)
+        .enter()
+        .append("path")
+        .attr("d", path)
+        .attr("data-killed", function(d) {
+            return d.killed;
+        })
+        .attr("data-wounded", function(d) {
+            return d.wounded;
+        })
+        .attr("class", function(d) {
+            return quantize(d.killed);
+        })
+        .append("text")
+        .text(function(d) {
+            return d.name;
+        });
+
+    svg.selectAll("path")
+        .data(us.objects.states)
+        .append("text").text(function(d) {
+            return d.name;
+        });
+}
+</script>
+
+</html>
