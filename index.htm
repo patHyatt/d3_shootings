@@ -3,13 +3,14 @@
 <head>
     <style>
     path {
-        fill: red; /*no data*/
+        fill: red;
+        /*no data*/
         stroke: #888;
         stroke-linejoin: round;
     }
     
     .d0 {
-        fill: rgb(247, 251, 255);
+        fill: rgb(210, 255, 255);
     }
     
     .d1 {
@@ -51,14 +52,43 @@
 </head>
 
 <body>
+    <label for="year">Select year to display</label>
+    <select id="year">
+    </select>
 </body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.19/topojson.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/queue-async/1.0.7/queue.min.js"></script>
 <script type="text/javascript">
-// d3.select("select[name='year']").on("change", function() {
-//     console.log(this.value);
-// });
+var yearsAvailable = [
+    "2013",
+    "2014",
+    "2015",
+];
+
+var select = d3.select("#year");
+
+select.selectAll("option")
+    .data(yearsAvailable)
+    .enter()
+    .append("option")
+    .attr("value", function(d) {
+        return d;
+    }).text(function(d) {
+        return d;
+    });
+
+select.on('change', function() {
+    changeYear(select.node().value);
+});
+
+function changeYear(year) {
+    d3.csv("data/" + year + ".csv", function(d) {
+        return d;
+    }, function(error, rows) {
+        updateForYear(rows);
+    });
+}
 
 var width = 1280,
     height = 768;
@@ -77,8 +107,15 @@ var projection = d3.geo.albersUsa()
 var path = d3.geo.path()
     .projection(projection);
 
+var features;
+
+var svg = d3.select("body")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
 queue()
-    .defer(d3.csv, "data/2014.csv")
+    .defer(d3.csv, "data/2013.csv")
     .defer(d3.json, "data/us.json")
     .defer(d3.tsv, "data/us-state-names.tsv")
     .await(build);
@@ -89,7 +126,7 @@ function build(error, stats, us, names) {
         return;
     }
 
-    var features = topojson.feature(us, us.objects.states).features;
+    features = topojson.feature(us, us.objects.states).features;
 
     //merge names set (w/ state abbreivations) to US set
     features.forEach(function(g) {
@@ -99,10 +136,16 @@ function build(error, stats, us, names) {
         g.name = (result[0] !== undefined) ? result[0].code : null;
     });
 
+    updateForYear(stats);
+    update();
+
+}
+
+function updateForYear(stats) {
     //merge CSV set to US set
     features.forEach(function(g) {
-        g.killed = g.killed ? g.killed : 0;
-        g.wounded = g.wounded ? g.wounded : 0;
+        g.killed = 0;
+        g.wounded = 0;
         var results = stats.filter(function(d) {
             var state = d.location.substr(d.location.length - 2, 2).trim().toUpperCase();
             return g.name == state;
@@ -114,34 +157,28 @@ function build(error, stats, us, names) {
             return +d.wounded;
         });
     });
+    update();
+}
 
-    var svg = d3.select("body")
-        .append("svg")
-        .attr("width", width)
-        .attr("height", height);
-
-    svg.selectAll("path")
-        .data(features)
+function update() {
+    var paths = svg.selectAll("path")
+        .data(features);
+    paths
         .enter()
-        .append("path")
-        .attr("d", path)
-        .attr("data-killed", function(d) {
-            return d.killed;
-        })
-        .attr("data-wounded", function(d) {
-            return d.wounded;
-        })
-        .attr("class", function(d) {
-            return quantize(d.killed);
-        })
-        .append("text")
-        .text(function(d) {
-            return d.name;
-        });
+        .append("path");
 
-    svg.selectAll("path")
-        .data(us.objects.states)
-        .append("text").text(function(d) {
+    paths.attr("d", path);
+    paths.attr("data-killed", function(d) {
+        return d.killed;
+    });
+    paths.attr("data-wounded", function(d) {
+        return d.wounded;
+    });
+    paths.attr("class", function(d) {
+        return quantize(d.killed);
+    });
+    paths.append("text")
+        .text(function(d) {
             return d.name;
         });
 }
