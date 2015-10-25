@@ -83,10 +83,11 @@ select.on('change', function() {
 });
 
 function changeYear(year) {
-    d3.csv("data/" + year + ".csv", function(d) {
-        return d;
-    }, function(error, rows) {
-        updateForYear(rows);
+    var q = queue(2);
+    q.defer(d3.csv, "data/" + year + ".csv");
+    q.defer(d3.json, "data/us-population-by-state-" + year + ".json");
+    q.await(function(error, stats, pop) {
+        updateForYear(stats, pop);
     });
 }
 
@@ -99,15 +100,12 @@ var quantize = d3.scale.quantize()
         return "d" + i;
     }));
 
-
 var projection = d3.geo.albersUsa()
-    .scale(1280)
+    .scale(width)
     .translate([width / 2, height / 2]);
 
 var path = d3.geo.path()
     .projection(projection);
-
-var features;
 
 var svg = d3.select("body")
     .append("svg")
@@ -115,12 +113,13 @@ var svg = d3.select("body")
     .attr("height", height);
 
 queue()
-    .defer(d3.csv, "data/2013.csv")
     .defer(d3.json, "data/us.json")
     .defer(d3.tsv, "data/us-state-names.tsv")
-    .await(build);
+    .await(initalize);
 
-function build(error, stats, us, names) {
+var features;
+
+function initalize(error, us, names) {
     if (error) {
         console.error(error);
         return;
@@ -136,16 +135,17 @@ function build(error, stats, us, names) {
         g.name = (result[0] !== undefined) ? result[0].code : null;
     });
 
-    updateForYear(stats);
-    update();
-
+    changeYear(2013);
+    reload();
 }
 
-function updateForYear(stats) {
+function updateForYear(stats, pop) {
     //merge CSV set to US set
     features.forEach(function(g) {
         g.killed = 0;
         g.wounded = 0;
+        g.population = 0;
+
         var results = stats.filter(function(d) {
             var state = d.location.substr(d.location.length - 2, 2).trim().toUpperCase();
             return g.name == state;
@@ -156,11 +156,16 @@ function updateForYear(stats) {
         g.wounded += d3.sum(results, function(d) {
             return +d.wounded;
         });
+
+        var population = pop.filter(function(arr) {
+            return g.id == +arr[2];
+        });
+        g.population = !population[0] ? 0 : +population[0][0];
     });
-    update();
+    reload();
 }
 
-function update() {
+function reload() {
     var paths = svg.selectAll("path")
         .data(features);
     paths
@@ -174,8 +179,11 @@ function update() {
     paths.attr("data-wounded", function(d) {
         return d.wounded;
     });
+    paths.attr("data-pop", function(d) {
+        return d.population;
+    });
     paths.attr("class", function(d) {
-        return quantize(d.killed);
+        return quantize(d.killed / d.population);
     });
     paths.append("text")
         .text(function(d) {
